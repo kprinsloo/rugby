@@ -124,32 +124,31 @@ TEMPLATE = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>Rugby minutes</title>
 <style>
 :root {
-  --bg: #f6f7f5; --surface: #ffffff; --text: #1b2420; --muted: #5d6b64;
-  --border: #dfe4e0; --accent: #1f6f54; --accent-soft: rgba(31, 111, 84, .16);
-  --hover: #f0f4f1; --warn: #8a5a00; --yc: #e0b400; --rc: #c0392b;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121714; --surface: #1a211d; --text: #e8eeea; --muted: #9aa8a0;
-    --border: #2d3832; --accent: #4cc29a; --accent-soft: rgba(76, 194, 154, .22);
-    --hover: #212a25; --warn: #e0b45a; --yc: #e0b400; --rc: #ef6a5b;
-  }
+  color-scheme: dark;
+  /* Same palette as the FPL dashboard */
+  --bg: #111318; --surface: #1a1d25; --text: #e8eaf0; --muted: #9aa1b2;
+  --border: #2b303b; --head: #24102a; --accent: #b88cff; --accent2: #2fd08a;
+  --accent-soft: rgba(184, 140, 255, .22); --hover: rgba(184, 140, 255, .07);
+  --warn: #fb923c; --yc: #e0b400; --rc: #e11d48;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
-h1 { font-size: 22px; margin: 0 0 2px; }
-.sub { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
+header { background: var(--head); color: #fff; padding: 18px 16px 14px; }
+.wrap, main { max-width: 1280px; margin: 0 auto; }
+main { padding: 16px 16px 48px; }
+h1 { font-size: 22px; margin: 0; }
+.sub { opacity: .8; margin: 4px 0 0; font-size: 13px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px; margin-bottom: 16px; }
 .tile { background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; padding: 12px 14px; }
-.tile .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.tile .l { color: var(--muted); font-size: 13px; }
+.tile .v { font-size: 24px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.tile .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .panel { background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; padding: 14px; margin-bottom: 16px; }
 .filters { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: flex-end; }
@@ -157,29 +156,29 @@ h1 { font-size: 22px; margin: 0 0 2px; }
 .field label { font-size: 12px; color: var(--muted); font-weight: 600;
   text-transform: uppercase; letter-spacing: .04em; }
 select, input[type=search], button {
-  font: inherit; color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+  font: inherit; font-size: 14px; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; }
 select:focus-visible, input:focus-visible, button:focus-visible, th button:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px; }
 button { cursor: pointer; }
 button:hover { background: var(--hover); }
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; background: transparent; }
 .seg button + button { border-left: 1px solid var(--border); }
-.seg button[aria-pressed=true] { background: var(--accent); color: #fff; }
-@media (prefers-color-scheme: dark) { .seg button[aria-pressed=true] { color: #0d1511; } }
+.seg button[aria-pressed=true] { background: var(--accent); color: #111318; font-weight: 600; }
+input[type=checkbox] { accent-color: var(--accent); }
 .checks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 14px; }
 .checks label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
 .tablewrap { overflow: auto; max-height: 68vh; border: 1px solid var(--border);
   border-radius: 10px; background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-th, td { padding: 8px 10px; text-align: left; white-space: nowrap;
+th, td { padding: 6px 8px; font-size: 13.5px; text-align: left; white-space: nowrap;
   border-bottom: 1px solid var(--border); }
 th { position: sticky; top: 0; background: var(--surface); z-index: 1;
-  font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
 th.num, td.num { text-align: right; }
-th.sel button { color: var(--accent); }
+th.sel button { color: var(--text); }
 th.sel { background: var(--accent-soft); }
 th[aria-sort=ascending] button::after { content: "\25B2"; font-size: 9px; }
 th[aria-sort=descending] button::after { content: "\25BC"; font-size: 9px; }
@@ -192,6 +191,7 @@ tbody tr:hover { background: var(--hover); }
 .chip { display: inline-block; min-width: 18px; text-align: center; font-size: 11px;
   font-weight: 700; border-radius: 4px; padding: 0 4px; color: #111; margin-right: 3px; }
 .chip.y { background: var(--yc); } .chip.r { background: var(--rc); color: #fff; }
+.accent2 { color: var(--accent2); }
 .mark { color: var(--warn); cursor: help; }
 .pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
   justify-content: space-between; margin-top: 10px; color: var(--muted); font-size: 14px; }
@@ -201,15 +201,17 @@ tbody tr:hover { background: var(--hover); }
 </style>
 </head>
 <body>
-<main>
+<header><div class="wrap">
   <h1>Rugby minutes</h1>
   <p class="sub" id="sub"></p>
+</div></header>
+<main>
 
   <section class="tiles" aria-label="Summary of the rows shown">
-    <div class="tile"><div class="v" id="t-matches">0</div><div class="l">Matches</div></div>
-    <div class="tile"><div class="v" id="t-players">0</div><div class="l">Players</div></div>
-    <div class="tile"><div class="v" id="t-apps">0</div><div class="l">Appearances</div></div>
-    <div class="tile"><div class="v" id="t-mins">0</div><div class="l" id="t-mins-l">Minutes played</div></div>
+    <div class="tile"><div class="l">Matches</div><div class="v" id="t-matches">0</div></div>
+    <div class="tile"><div class="l">Players</div><div class="v" id="t-players">0</div></div>
+    <div class="tile"><div class="l">Appearances</div><div class="v" id="t-apps">0</div></div>
+    <div class="tile"><div class="l" id="t-mins-l">Minutes played</div><div class="v" id="t-mins">0</div></div>
   </section>
 
   <section class="panel" aria-label="Filters">
