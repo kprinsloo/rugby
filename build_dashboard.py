@@ -169,6 +169,18 @@ button:hover { background: var(--hover); }
 input[type=checkbox] { accent-color: var(--accent); }
 .checks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 14px; }
 .checks label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.share { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-top: 12px;
+  padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px; }
+.share .lbl { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; margin-right: 2px; }
+.primary { background: var(--accent); color: #111318; border-color: var(--accent); font-weight: 600; }
+.primary:hover { background: #c9a6ff; }
+dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; max-width: min(94vw, 620px); }
+dialog::backdrop { background: rgba(0, 0, 0, .6); }
+dialog canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+dialog .msg { color: var(--muted); margin: 0 0 8px; font-size: 14px; }
 .tablewrap { overflow: auto; max-height: 68vh; border: 1px solid var(--border);
   border-radius: 10px; background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
@@ -245,7 +257,25 @@ tbody tr:hover { background: var(--hover); }
       <label><input id="f-played" type="checkbox" checked> Only players who played</label>
       <label><input id="f-uncertain" type="checkbox"> Hide uncertain positions (?)</label>
     </div>
+    <div class="share">
+      <span class="lbl">Share image</span>
+      <select id="s-top" aria-label="Players in the image">
+        <option value="5">Top 5</option><option value="10" selected>Top 10</option></select>
+      <select id="s-size" aria-label="Image size">
+        <option value="1080">Square 1080&times;1080</option>
+        <option value="1350">Portrait 1080&times;1350</option></select>
+      <button id="s-open" type="button" class="primary">Create image</button>
+    </div>
   </section>
+
+  <dialog id="s-dlg" aria-label="Share image preview">
+    <p class="msg" id="s-msg"></p>
+    <canvas id="s-canvas" width="1080" height="1080"></canvas>
+    <div class="row">
+      <button id="s-close" type="button">Close</button>
+      <button id="s-dl" type="button" class="primary">Download PNG</button>
+    </div>
+  </dialog>
 
   <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table>
     <div class="empty" id="empty" hidden>No rows match these filters.</div></div>
@@ -524,6 +554,9 @@ function wire() {
   $("v-totals").onclick = () => setView("totals");
   $("prev").onclick = () => { state.page--; render(); };
   $("next").onclick = () => { state.page++; render(); };
+  $("s-open").onclick = openShare;
+  $("s-close").onclick = () => $("s-dlg").close ? $("s-dlg").close() : $("s-dlg").removeAttribute("open");
+  $("s-dl").onclick = downloadShare;
   $("reset").onclick = () => {
     Object.assign(state, {metric: "m", type: "intl", team: "", year: "", month: "", pos: "", q: "", playedOnly: true, hideUncertain: false});
     $("f-type").value = "intl"; $("f-q").value = ""; $("f-played").checked = true; $("f-uncertain").checked = false;
@@ -537,6 +570,174 @@ function wire() {
     else { state.sortKey = key; state.sortDir = ["m", "avg", "apps", "starts", "d", "tr", "pts", "cv", "pg", "yc", "rc"].includes(key) ? "desc" : "asc"; }
     render();
   };
+}
+
+
+// ---------------------------------------------------------------- share image
+// Ranks players (one row per player and team) by the chosen performance
+// indicator, using every filter on the page, and draws a social-media card.
+const SHARE_TITLES = {m: "Most minutes played", tr: "Top try scorers", pts: "Top points scorers",
+  cv: "Most conversions", pg: "Most penalty goals", yc: "Most yellow cards", rc: "Most red cards"};
+const C = {bg: "#111318", card: "#1a1d25", head: "#24102a", fg: "#e8eaf0", muted: "#9aa1b2",
+  line: "#2b303b", accent: "#b88cff", accent2: "#2fd08a"};
+const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+function shareRanking() {
+  const key = state.metric;
+  const map = new Map();
+  filtered().forEach(r => {
+    if (!(r.m > 0)) return;
+    const id = r.k + "|" + r.t;
+    let a = map.get(id);
+    if (!a) { a = {p: r.p, t: r.t, v: 0, m: 0, apps: 0, posMins: {}}; map.set(id, a); }
+    a.v += r[key] || 0; a.m += r.m; a.apps++;
+    if (r.pos) a.posMins[r.pos] = (a.posMins[r.pos] || 0) + r.m;
+  });
+  const list = [...map.values()].filter(a => a.v > 0);
+  list.forEach(a => {
+    a.pos = Object.keys(a.posMins).sort((x, y) => a.posMins[y] - a.posMins[x])[0] || "";
+  });
+  list.sort((a, b) => b.v - a.v || b.m - a.m || a.p.localeCompare(b.p));
+  return list;
+}
+
+function shareSubtitle() {
+  const parts = [];
+  parts.push(state.team || "All teams");
+  if (state.pos) parts.push(state.pos + "s");
+  if (state.month) parts.push(MONTHS[+state.month - 1] + (state.year ? " " + state.year : " (all years)"));
+  else if (state.year) parts.push(state.year);
+  parts.push({intl: "Test matches", all: "All matches", other: "Non-test matches"}[state.type]);
+  if (state.q.trim()) parts.push('"' + state.q.trim() + '"');
+  return parts.join(" · ");
+}
+
+function fitText(ctx, text, max) {
+  if (ctx.measureText(text).width <= max) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(t + "…").width > max) t = t.slice(0, -1);
+  return t + "…";
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.min(r, h / 2, w / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+function drawShare() {
+  const W = 1080, H = +$("s-size").value, top = +$("s-top").value;
+  const cv = $("s-canvas"); cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d");
+  const rows = shareRanking().slice(0, top);
+  const matches = new Set(filtered().filter(r => r.m > 0).map(r => r.id)).size;
+  const isMin = state.metric === "m";
+
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  // header band
+  const headH = 230;
+  ctx.fillStyle = C.head; ctx.fillRect(0, 0, W, headH);
+  ctx.fillStyle = C.accent; ctx.fillRect(0, headH - 6, W, 6);
+  ctx.fillStyle = "#fff"; ctx.textBaseline = "alphabetic";
+  ctx.font = "600 26px " + FONT; ctx.globalAlpha = .75;
+  ctx.fillText("RUGBY · PLAYER STATS", 64, 78);
+  ctx.globalAlpha = 1;
+  ctx.font = "700 64px " + FONT;
+  ctx.fillText(fitText(ctx, SHARE_TITLES[state.metric], W - 128), 64, 148);
+  ctx.font = "400 30px " + FONT; ctx.globalAlpha = .85;
+  ctx.fillText(fitText(ctx, shareSubtitle() + " · " + matches + (matches === 1 ? " match" : " matches"),
+    W - 128), 64, 198);
+  ctx.globalAlpha = 1;
+
+  // rows
+  const footH = 84, padTop = 36, padBot = 24;
+  const areaTop = headH + padTop, areaH = H - headH - footH - padTop - padBot;
+  const rowH = areaH / top, gap = Math.min(16, rowH * .14);
+  const max = rows.reduce((m, r) => Math.max(m, r.v), 0) || 1;
+  const x0 = 64, x1 = W - 64;
+  // Bars stop short of the value column so they never run through the numbers.
+  const bigAll = Math.min(38, (rowH - gap) * .36);
+  ctx.font = "700 " + bigAll + "px " + FONT;
+  const valCol = rows.reduce((w, r) => Math.max(w, ctx.measureText(isMin ? int(r.v) + " min" : String(r.v)).width), 0) + 56;
+  // Equal values share a rank (1, 1, 3, ...).
+  const ranks = rows.map((r, i) => i);
+  rows.forEach((r, i) => { if (i > 0 && r.v === rows[i - 1].v) ranks[i] = ranks[i - 1]; });
+  rows.forEach((r, i) => {
+    const y = areaTop + i * rowH, h = rowH - gap;
+    ctx.fillStyle = C.card; roundRect(ctx, x0, y, x1 - x0, h, 14); ctx.fill();
+    const barW = Math.max(28, (x1 - x0 - valCol) * (r.v / max));
+    ctx.fillStyle = "rgba(184, 140, 255, 0.20)"; roundRect(ctx, x0, y, barW, h, 14); ctx.fill();
+    const mid = y + h / 2;
+    const big = Math.min(38, h * .36), small = Math.min(25, h * .24);
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = ranks[i] === 0 ? C.accent : C.muted;
+    ctx.font = "700 " + big + "px " + FONT; ctx.textAlign = "center";
+    ctx.fillText(String(ranks[i] + 1), x0 + 48, mid);
+    ctx.textAlign = "right"; ctx.fillStyle = C.fg; ctx.font = "700 " + big + "px " + FONT;
+    const valText = isMin ? int(r.v) + " min" : String(r.v);
+    ctx.fillText(valText, x1 - 28, mid - (h > 70 ? small * .55 : 0));
+    const valW = ctx.measureText(valText).width;
+    if (h > 70) {
+      ctx.font = "400 " + small + "px " + FONT; ctx.fillStyle = C.muted;
+      ctx.fillText(r.apps + (r.apps === 1 ? " match" : " matches"), x1 - 28, mid + big * .55);
+    }
+    ctx.textAlign = "left";
+    const nameMax = x1 - 28 - valW - 32 - (x0 + 96);
+    ctx.fillStyle = C.fg; ctx.font = "600 " + big + "px " + FONT;
+    if (h > 70) {
+      ctx.fillText(fitText(ctx, r.p, nameMax), x0 + 96, mid - small * .55);
+      ctx.font = "400 " + small + "px " + FONT; ctx.fillStyle = C.muted;
+      ctx.fillText(fitText(ctx, r.t + (r.pos ? " · " + r.pos : ""), nameMax), x0 + 96, mid + big * .55);
+    } else {
+      ctx.fillText(fitText(ctx, r.p + "  ", nameMax * .62), x0 + 96, mid);
+      const nw = Math.min(ctx.measureText(r.p + "  ").width, nameMax * .62);
+      ctx.font = "400 " + small + "px " + FONT; ctx.fillStyle = C.muted;
+      ctx.fillText(fitText(ctx, r.t + (r.pos ? " · " + r.pos : ""), nameMax - nw), x0 + 96 + nw, mid);
+    }
+  });
+  ctx.textBaseline = "alphabetic";
+
+  // footer
+  ctx.fillStyle = C.line; ctx.fillRect(64, H - footH, W - 128, 2);
+  ctx.font = "400 24px " + FONT; ctx.fillStyle = C.muted; ctx.textAlign = "left";
+  ctx.fillText("Data: World Rugby match feed · to " + lastDate(), 64, H - 34);
+  ctx.textAlign = "right";
+  const host = /^https?:/.test(location.protocol) ? location.host + location.pathname.replace(/index\.html$/, "") : "";
+  if (host) ctx.fillText(host.replace(/\/$/, ""), W - 64, H - 34);
+  ctx.textAlign = "left";
+  return rows.length;
+}
+
+function lastDate() {
+  const d = filtered().map(r => r.d).sort();
+  return d.length ? d[d.length - 1] : "";
+}
+
+function shareFileName() {
+  const bits = ["rugby", SHARE_TITLES[state.metric], state.team, state.pos,
+    state.month ? MONTHS[+state.month - 1] : "", state.year];
+  return bits.filter(Boolean).join("-").toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") + ".png";
+}
+
+function openShare() {
+  const n = drawShare();
+  const top = +$("s-top").value;
+  $("s-msg").textContent = n === 0 ? "Nothing to rank with these filters - change them and try again."
+    : n < top ? "Only " + n + " players match these filters." : "Preview - uses the filters and performance indicator above.";
+  $("s-dl").disabled = n === 0;
+  const dlg = $("s-dlg");
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+}
+
+function downloadShare() {
+  $("s-canvas").toBlob(blob => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = shareFileName();
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, "image/png");
 }
 
 (function init() {
